@@ -11,13 +11,35 @@ class Genome:
     def __init__(self, name, version, snps):
         self.name = name   # who the person is
         self.version = version # 36, 37
+        self.chroms = []  # list of Chromo objects
+        while len(snps) > 0:
+            this_chrome = snps[0].get_chromosome()
+            temp_snp_list = []
+            while this_chrome == snps[0].get_chromosome():
+                temp_snp_list.append(snps[0])
+                snps.pop(0)
+            self.chroms.append(Chromo(this_chrome, temp_snp_list))
+        self.errors = 0  # add to errors any time something impossible happens in the snp calulation, maybe should be an error log, list of messages
+    def __str__(self):
+        return 'genome for ' + self.name + ' version ' + str(self.version) + ' number chromosomes ' + str(len(self.chroms))
+    def get_chromosomes(self):
+        return self.chroms  # return the list of all of the chromosomes
+ 
+             
+class Chromo:  
+    '''
+    
+    '''  
+    def __init__(self, name, snps=[]):
+        '''
+        name is a string, '1', '2', ..., 'Y', 'MT'
+        snps is a list of Snp objects
+        '''
+        self.name = name
         self.snps = {}  # store the snps in a dictionary
         self.errors = 0  # add to errors any time something impossible happens in the snp calulation, maybe should be an error log, list of messages
         for snp in snps:
-            self.snps[snp.get_name()] = snp
-    def __str__(self):
-        x = self.snps.values()
-        return 'genome for ' + self.name + ' version ' + str(self.version) + ' # snps ' + str(len(self.snps.values()))
+            self.snps[snp.get_name()] = snp        
     def add(self, snp):
         self.snps[snp.get_name()] = snp # add the snp, overwrites if it is already there   
     def get_snp_names(self):
@@ -52,7 +74,8 @@ class Genome:
             new_letter = snp.get_uservariation().strip('-')
             current_snp.update_geno(new_letter)
         except KeyError:
-             self.snps[snp.get_name()] = snp         
+             self.snps[snp.get_name()] = snp   
+                  
 class Snp:
     # Each SNP is one line in the original file
     def __init__(self, name, variation, chromosome, position, strand, uservariation, genotemp={}):
