@@ -6,6 +6,7 @@ utilities for genome reconstruction
 # used code from https://gist.github.com/philippbayer/1626642
 import time, cProfile, pstats
 import cPickle as pickle
+from collections import OrderedDict
 
 class Genome:
     def __init__(self, name, version, snps):
@@ -18,12 +19,19 @@ class Genome:
             while this_chrome == snps[0].get_chromosome():
                 temp_snp_list.append(snps[0])
                 snps.pop(0)
+                if len(snps) == 0:
+                    break
             self.chroms.append(Chromo(this_chrome, temp_snp_list))
         self.errors = 0  # add to errors any time something impossible happens in the snp calulation, maybe should be an error log, list of messages
     def __str__(self):
         return 'genome for ' + self.name + ' version ' + str(self.version) + ' number chromosomes ' + str(len(self.chroms))
     def get_chromosomes(self):
         return self.chroms  # return the list of all of the chromosomes
+    def get_chromosome(self, name):
+        for chrome in self.chroms:
+            if chrome.get_name() == name:
+                return chrome
+        return None # if name isn't found in the chromosome list, return None
  
              
 class Chromo:  
@@ -36,10 +44,14 @@ class Chromo:
         snps is a list of Snp objects
         '''
         self.name = name
-        self.snps = {}  # store the snps in a dictionary
+        self.snps = OrderedDict()  # store the snps in an OrderedDict to preserve the order of snps
         self.errors = 0  # add to errors any time something impossible happens in the snp calulation, maybe should be an error log, list of messages
         for snp in snps:
-            self.snps[snp.get_name()] = snp        
+            self.snps[snp.get_name()] = snp 
+    def __str__(self):
+        return 'chromosome ' + self.name + ' contains ' + str(len(self.snps.keys())) + ' snps'   
+    def get_name(self):
+        return self.name   
     def add(self, snp):
         self.snps[snp.get_name()] = snp # add the snp, overwrites if it is already there   
     def get_snp_names(self):
@@ -172,21 +184,28 @@ def parse23andme(filein):
     for line in filein:
         if "#" in line: # skip comments
             continue
-        lineArray = line.replace(" ", "").replace("\n","").split("\t")
-        allSnps.append(Snp(lineArray[0], None, lineArray[1], lineArray[2], None, lineArray[3]))  
+        lineArray = line.replace(" ", "").replace("\n","").replace("\r", "").split("\t")
+        try:
+            allSnps.append(Snp(lineArray[0], None, lineArray[1], lineArray[2], None, lineArray[3])) 
+        except IndexError:
+            print('lineArray exception in parse23andme', lineArray) 
     return allSnps
 def test_parse23andme():
     #filein = open('c:\\Users\\Jim\\documents\\DNA\\23andme-37-CynthiaTest.txt')
-    filein = open('c:\\Users\\Jim\\documents\\DNA\\23andmeRay_Smith-37-Test.txt')
+    #filein = open('c:\\Users\\Jim\\documents\\DNA\\23andmeRay_Smith-37-Test2.txt')
+    filein = open('/Users/jim/Documents/DNA/23andmeRay_Smith-37-Test2.txt')
     #filein = open('c:\\Users\\Jim\\documents\\DNA\\ftdna-37-JamesSmithTestData3.csv')
     b_time = time.time()
     #cindy_genome = Genome('cindy_vrazsity', 37, parse23andme(filein))
     ray_genome = Genome('ray_smith', 37, parse23andme(filein))
     #jim_genome = Genome('jim_smith', 37, parse23andme(filein))
     #print(cindy_genome)
-    print('test_parse23andme', (time.time() - b_time)/60, len(ray_genome.get_snp_names()))
+    #print('test_parse23andme', (time.time() - b_time)/60, len(ray_genome.get_snp_names()))
     #print('len', len(jim_genome.get_snp_names()))
     #print(ray_genome.percent_covered())
+    for chrom in ray_genome.get_chromosomes():
+        for snp_name in chrom.get_snp_names():
+            print('snp: ', chrom.get_snp(snp_name).get_uservariation())
 
 def parse_files(f):
     '''
@@ -198,7 +217,8 @@ def parse_files(f):
     if 'ftdna' in f:
         return parseFTDna(my_file)
     return 'not a supported file type'
-
+def test_parse_files():
+    print(parse_files('/Users/jim/Documents/DNA/23andme-37-CarolynSmithTest.txt'))
 def compute_father(mother, children = [], cousins = [], mitochondrial = [], ydna = [], father_genome = Genome('father', 37, [])):
     '''
     inputs; mother is a file name. There must be either sons or daughters file names in a list
@@ -232,20 +252,21 @@ def compute_father(mother, children = [], cousins = [], mitochondrial = [], ydna
 #                print(snp_name, genome.get_snp(snp_name).get_uservariation(), mother_genome.get_snp(snp_name).get_uservariation())       
     return father_genome
 def test_compute_father():
-    father = compute_father('c:\\Users\\Jim\\documents\\DNA\\ftdna-37-CarolynSmithTestData.csv', children = ['c:\\Users\\Jim\\documents\\DNA\\ftdna-37-JamesSmithTestData2.csv'])
+    #father = compute_father('c:\\Users\\Jim\\documents\\DNA\\ftdna-37-CarolynSmithTestData.csv', children = ['c:\\Users\\Jim\\documents\\DNA\\ftdna-37-JamesSmithTestData2.csv'])
+    father = compute_father('/Users/Jim/documents/DNA/ftdna-37-CarolynSmithTestData.csv', children = ['/Users/Jim/documents/DNA/ftdna-37-JamesSmithTestData.csv'])
     print('father coverage from Jim, ftdna', father.percent_covered(), len(father.get_snp_names()))#start with Jim
-    father = compute_father('c:\\Users\\Jim\\documents\\DNA\\23andme-37-CarolynSmithTest2.txt', 
-                            children = ['c:\\Users\\Jim\\documents\\DNA\\23andmeRay_Smith-37-Test2.txt', 'c:\\Users\\Jim\\documents\\DNA\\23andme-37-Suzanne_BusjahnTest2.txt', 
-                                        'c:\\Users\\Jim\\documents\\DNA\\23andme-37-CynthiaTest2.txt'],
-                            father_genome = father)
-    print('father coverage from rest of siblings', father.percent_covered(), len(father.get_snp_names()))
-    for snp_name in father.get_snp_names():
-        print(snp_name, father.get_snp(snp_name).percent_covered()[1], father.get_snp(snp_name).get_chromosome(), father.get_snp(snp_name).get_genotemp())
-    save_object(father, 'c:\\Users\\Jim\\documents\\DNA\\father.pkl')
-    father = get_object('c:\\Users\\Jim\\documents\\DNA\\father.pkl')
-    print('recovered father', father)
-    for snp_name in father.get_snp_names():
-        print(snp_name, father.get_snp(snp_name).percent_covered()[1], father.get_snp(snp_name).get_chromosome(), father.get_snp(snp_name).get_genotemp())
+#     father = compute_father('c:\\Users\\Jim\\documents\\DNA\\23andme-37-CarolynSmithTest2.txt', 
+#                             children = ['c:\\Users\\Jim\\documents\\DNA\\23andmeRay_Smith-37-Test2.txt', 'c:\\Users\\Jim\\documents\\DNA\\23andme-37-Suzanne_BusjahnTest2.txt', 
+#                                         'c:\\Users\\Jim\\documents\\DNA\\23andme-37-CynthiaTest2.txt'],
+#                             father_genome = father)
+#     print('father coverage from rest of siblings', father.percent_covered(), len(father.get_snp_names()))
+#     for snp_name in father.get_snp_names():
+#         print(snp_name, father.get_snp(snp_name).percent_covered()[1], father.get_snp(snp_name).get_chromosome(), father.get_snp(snp_name).get_genotemp())
+#     save_object(father, 'c:\\Users\\Jim\\documents\\DNA\\father.pkl')
+#     father = get_object('c:\\Users\\Jim\\documents\\DNA\\father.pkl')
+#     print('recovered father', father)
+#     for snp_name in father.get_snp_names():
+#         print(snp_name, father.get_snp(snp_name).percent_covered()[1], father.get_snp(snp_name).get_chromosome(), father.get_snp(snp_name).get_genotemp())
     # add me
 #    father = compute_father('c:\\Users\\Jim\\documents\\DNA\\ftdna-37-CarolynSmithTestData.csv', sons = ['c:\\Users\\Jim\\documents\\DNA\\ftdna-37-JamesSmithTestData.csv'])
 #    print('father coverage from Ray', father.percent_covered(), len(father.get_snp_names()))
@@ -300,9 +321,11 @@ def get_object(filename):
         return pickle.load(input)
      
 def runtests():
-    test_compute_father()
+    #test_parse_files()
+    #test_compute_father()
     #test_parseFTDna()
     #test_parse23andme()
+    pass
     
 runtests()
 #cProfile.run('test_compute_father()', 'restats')
